@@ -1,0 +1,82 @@
+#!/usr/bin/zsh
+
+function exitVaultDir()
+{
+	if [ $(pwd) = "/home/$SUDO_USER/Vault" ]
+	then
+		cd ..
+	fi
+}
+
+if [ $(whoami) != "root" ]
+then
+	echo "Please run vault as root"
+	exit 1
+fi
+
+command=$1
+if [ $command = "init" ]
+then
+	if [ -e /home/$SUDO_USER/.vaultStore ]
+	then
+		echo -n "A vault already exists, overwrite?: "
+		read ans
+		if [ $ans = "y" ]
+		then
+			rm /home/$SUDO_USER/.vaultStore
+		fi
+	fi
+	#create vaultStore
+	echo -n "Please enter a password for the vault: "
+	read -s pass1
+	echo -n "\nPlease confirm the password: "
+	read -s pass2
+	if [ $pass1 != $pass2 ]
+	then
+		echo "Passwords do not match"
+		exit 2
+	fi
+	echo -n "\nCreating Vault..."
+
+	truncate -s 50G /home/$SUDO_USER/.vaultStore &> /dev/null
+	printf $pass1 | cryptsetup luksFormat /home/$SUDO_USER/.vaultStore -d - &> /dev/null
+	mkdir /home/$SUDO_USER/Vault &> /dev/null
+	printf $pass1 | cryptsetup luksOpen /home/$SUDO_USER/.vaultStore Vault -d - &> /dev/null
+	mkfs.ext4 /dev/mapper/Vault &> /dev/null
+	mount /dev/mapper/Vault /home/$SUDO_USER/Vault &> /dev/null
+	chown -R $SUDO_USER:$SUDO_USER /home/$SUDO_USER/Vault &> /dev/null
+	echo "Finished"
+elif [ $command = "close" ]
+then
+	echo "Closing Vault"
+	umount /home/$SUDO_USER/Vault &> /dev/null
+	cryptsetup close /dev/mapper/Vault &> /dev/null
+	rm -rf /home/$SUDO_USER/Vault &> /dev/null
+elif [ $command = "open" ]
+then
+	echo -n "Please enter vault password: "
+	read -s pass
+    mkdir /home/$SUDO_USER/Vault &> /dev/null
+    printf $pass | cryptsetup luksOpen /home/$SUDO_USER/.vaultStore Vault -d - &> /dev/null
+    mount /dev/mapper/Vault /home/$SUDO_USER/Vault &> /dev/null
+    chown -R $SUDO_USER:$SUDO_USER /home/$SUDO_USER/Vault $> /dev/null
+elif [ $command = "remove" ]
+then
+	# if you're in the vault, back out first.
+	exitVaultDir
+	umount /home/$SUDO_USER/Vault &> /dev/null
+	cryptsetup close /dev/mapper/Vault &> /dev/null
+	rm -rf /home/$SUDO_USER/Vault &> /dev/null
+	rm /home/$SUDO_USER/.vaultStore &> /dev/null
+elif [ $command = "status" ]
+then
+	if [ -e /dev/mapper/Vault ]
+	then
+		echo "Vault is open"
+	elif [ -e /home/$SUDO_USER/.vaultStore ]
+	then
+		echo "Vault is not initialized"
+	else
+		echo "Vault is closed"
+	fi
+fi
