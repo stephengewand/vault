@@ -1,10 +1,11 @@
-#!/usr/bin/zsh
+#!/usr/bin/bash
 
-function exitVaultDir()
+function checkVaultUse()
 {
-	if [ $(pwd) = "/home/$SUDO_USER/Vault" ]
+	if [ $PWD = "/home/$SUDO_USER/Vault" ]
 	then
-		cd ..
+		echo "You can't delete the vault when you are using it"
+		exit 3
 	fi
 }
 
@@ -49,9 +50,10 @@ then
 elif [ $command = "close" ]
 then
 	echo "Closing Vault"
-	umount /home/$SUDO_USER/Vault &> /dev/null
-	cryptsetup close /dev/mapper/Vault &> /dev/null
-	rm -rf /home/$SUDO_USER/Vault &> /dev/null
+	checkVaultUse
+	umount /home/$SUDO_USER/Vault #&> /dev/null
+	cryptsetup close /dev/mapper/Vault #&> /dev/null
+	rm -rf /home/$SUDO_USER/Vault #&> /dev/null
 elif [ $command = "open" ]
 then
 	echo -n "Please enter vault password: "
@@ -59,11 +61,11 @@ then
     mkdir /home/$SUDO_USER/Vault &> /dev/null
     printf $pass | cryptsetup luksOpen /home/$SUDO_USER/.vaultStore Vault -d - &> /dev/null
     mount /dev/mapper/Vault /home/$SUDO_USER/Vault &> /dev/null
-    chown -R $SUDO_USER:$SUDO_USER /home/$SUDO_USER/Vault $> /dev/null
+    chown -R $SUDO_USER:$SUDO_USER /home/$SUDO_USER/Vault &> /dev/null
 elif [ $command = "remove" ]
 then
 	# if you're in the vault, back out first.
-	exitVaultDir
+	checkVaultUse
 	umount /home/$SUDO_USER/Vault &> /dev/null
 	cryptsetup close /dev/mapper/Vault &> /dev/null
 	rm -rf /home/$SUDO_USER/Vault &> /dev/null
